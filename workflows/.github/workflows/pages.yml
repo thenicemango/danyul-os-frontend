@@ -1,15 +1,20 @@
+
 name: Deploy DANYUL OS to GitHub Pages
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: pages
   cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -17,31 +22,48 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Create public frontend configuration
         env:
           PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
           PUBLIC_SUPABASE_ANON_KEY: ${{ vars.PUBLIC_SUPABASE_ANON_KEY }}
         run: python3 scripts/build_config.py
+
       - name: Verify no privileged key appears in public files
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          files=[Path('index.html'),Path('app.js'),Path('cloud.js'),Path('config.js'),Path('research-inbox.js'),Path('operations.js'),Path('connected-feed.js')]
+          files = [
+              Path('index.html'),
+              Path('app.js'),
+              Path('cloud.js'),
+              Path('config.js'),
+              Path('research-inbox.js'),
+              Path('operations.js'),
+              Path('connected-feed.js'),
+          ]
           for f in files:
-              t=f.read_text().lower()
-              assert 'sb_secret_' not in t, f'{f}: secret key marker in build output'
-              assert 'service_role' not in t.replace('never put service_role keys here',''), f'{f}: service role marker in build output'
+              t = f.read_text().lower()
+              assert 'sb_secret_' not in t, f'{f}: secret key detected'
+              assert 'service_role' not in t.replace(
+                  'never put service_role keys here', ''
+              ), f'{f}: service-role marker detected'
           print('Public-file guard passed')
           PY
+
       - name: Stage only browser assets
         run: |
           mkdir -p public-site
           cp index.html app.js cloud.js research-inbox.js operations.js connected-feed.js config.js public-site/
+
       - uses: actions/configure-pages@v5
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public-site
+
       - id: deploy
         uses: actions/deploy-pages@v4
