@@ -13,7 +13,50 @@ function note(t,error=false){const n=panel.querySelector('#cloud-note');if(n){n.
 function button(label,fn){let b=el('button',{},label);b.addEventListener('click',fn);return b}
 function draw(){panel.replaceChildren();const head=el('div');head.append(el('strong',{},'☁ DANYUL Cloud'));head.append(button('− / +',()=>{let c=panel.querySelector('#cloud-body');c.hidden=!c.hidden}));panel.append(head);const body=el('div',{id:'cloud-body'});panel.append(body);
  if(!configured){body.append(el('small',{},'Local mode. Cloud is not configured. Your records remain in this browser.'));body.append(el('small',{},'Follow SETUP_CLOUD.md to enable private sync.'));return}
- if(!session){body.append(el('small',{},'Cloud is optional. Sign in with an email magic link.'));let inp=el('input',{type:'email',placeholder:'Email address','aria-label':'Email address'});body.append(inp);body.append(button('Email sign-in link',async()=>{try{const email=inp.value.trim();if(!/^\S+@\S+\.\S+$/.test(email))throw Error('Enter a valid email');await request('/auth/v1/otp',{method:'POST',body:{email,create_user:true,options:{email_redirect_to:location.origin+location.pathname}}},false);note('Check your inbox for the sign-in link.')}catch(e){note(e.message,true)}}));}
+
+if (!session) {
+  body.append(el('small', {}, 'Sign in with your DANYUL OS email and password.'));
+
+  const emailInput = el('input', {
+    type: 'email',
+    placeholder: 'Email address',
+    'aria-label': 'Email address'
+  });
+  const passwordInput = el('input', {
+    type: 'password',
+    placeholder: 'Password',
+    'aria-label': 'Password'
+  });
+
+  body.append(emailInput, passwordInput);
+
+  body.append(button('Sign in', async () => {
+    try {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      if (!email || !password) throw Error('Enter your email and password');
+
+      const result = await request(
+        '/auth/v1/token?grant_type=password',
+        { method: 'POST', body: { email, password } },
+        false
+      );
+
+      session = {
+        ...result,
+        expires_at: Math.floor(Date.now() / 1000) + Number(result.expires_in || 3600)
+      };
+
+      passwordInput.value = '';
+      saveSession();
+      await initialize();
+    } catch (error) {
+      passwordInput.value = '';
+      note(error.message, true);
+    }
+  }));
+}
  else {body.append(el('small',{},'Signed in. Cloud storage is private to this account.'));body.append(el('small',{},enabled?'Sync enabled · revision '+revision:'Sync paused until you choose a starting copy.'));let row=el('div',{className:'cloud-row'});body.append(row);if(!enabled){if(cloudExists)row.append(button('Use cloud copy',useCloud));row.append(button('Upload this browser copy',uploadLocal));row.append(button('Download local backup',()=>window.DANYUL_OS.exportBackup()));}else{row.append(button('Sync now',()=>sync(true)));row.append(button('Pause sync',()=>{enabled=false;dirty=false;draw();note('Sync paused. Local changes stay in this browser.')}));}row.append(button('Sign out',signOut));}
  const n=el('small',{id:'cloud-note','role':'status'},'No cloud action pending.');body.append(n);
 }
